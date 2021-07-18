@@ -1,6 +1,6 @@
 ---
 kind: pipeline
-name: build-and-deploy
+name: build-and-deploy-drone-oss
 
 platform:
   os: linux
@@ -12,15 +12,27 @@ steps:
     commands:
       - git clone --recursive https://github.com/drone/drone.git drone
       - (cd drone && git checkout $(cat ../VERSION))
-  - name: apply-patch
+  - name: apply-patch-dockerfile
     image: alpine:3.11
     commands:
-      - patch drone/docker/Dockerfile.server.linux.amd64 < Dockerfile.server.linux.amd64.patch
+      - patch drone/docker/Dockerfile.server.linux.amd64 < patch/Dockerfile.server.linux.amd64.patch
+  - name: download-golang-modules
+    image: golang:1.14
+    commands:
+      - cd drone && go mod vendor && cd --
+    environment:
+      GOPROXY: https://proxy.golang.org,direct
+  - name: apply-patch-gitlab-subgroup
+    image: alpine:3.11
+    commands:
+      - patch drone/vendor/github.com/drone/go-scm/scm/driver/gitlab/repo.go < patch/go-scm/gitlab-repo.go
+      - patch drone/vendor/github.com/drone/go-scm/scm/driver/gitlab/util.go < patch/go-scm/gitlab-util.go
+      - patch drone/vendor/github.com/drone/go-scm/scm/util.go < patch/go-scm/util.go
   - name: build-drone-oss
     image: golang:1.14
     commands:
-      - (cd drone && ../build.sh)
-      - (cd drone && ../tags.sh) > .tags
+      - (cd drone && ../scripts/build.sh)
+      - (cd drone && ../scripts/tags.sh) > .tags
     environment:
       CGO_ENABLED: 1
       GO111MODULE: on
@@ -33,16 +45,18 @@ steps:
       context: drone
       dockerfile: drone/docker/Dockerfile.server.linux.amd64
       password:
-        from_secret: docker_password
-      repo: garykim/drone-oss
-      username: garykim
-    when:
-      branch:
-        - master
-      event:
-        - push
+        from_secret: DOCKERHUB_PASSWORD
       repo:
-        - gary-kim/drone-oss
+        from_secret: DOCKERHUB_REPO_OSS
+      username:
+        from_secret: DOCKERHUB_USERNAME
+    # when:
+    #   branch:
+    #     - master
+    #   event:
+    #     - push
+    #   repo:
+    #     - JustinTW/drone-oss
 
 trigger:
   branch:
@@ -53,7 +67,7 @@ trigger:
 
 ---
 kind: pipeline
-name: personal-drone-nolimit
+name: build-and-deploy-drone-nolimit
 
 platform:
   os: linux
@@ -65,15 +79,27 @@ steps:
     commands:
       - git clone --recursive https://github.com/drone/drone.git drone
       - (cd drone && git checkout $(cat ../VERSION))
-  - name: apply-patch
+  - name: apply-patch-dockerfile
     image: alpine:3.11
     commands:
-      - patch drone/docker/Dockerfile.server.linux.amd64 < Dockerfile.server.linux.amd64.patch
+      - patch drone/docker/Dockerfile.server.linux.amd64 < patch/Dockerfile.server.linux.amd64.patch
+  - name: download-golang-modules
+    image: golang:1.14
+    commands:
+      - cd drone && go mod vendor && cd --
+    environment:
+      GOPROXY: https://proxy.golang.org,direct
+  - name: apply-patch-gitlab-subgroup
+    image: alpine:3.11
+    commands:
+      - patch drone/vendor/github.com/drone/go-scm/scm/driver/gitlab/repo.go < patch/go-scm/gitlab-repo.go
+      - patch drone/vendor/github.com/drone/go-scm/scm/driver/gitlab/util.go < patch/go-scm/gitlab-util.go
+      - patch drone/vendor/github.com/drone/go-scm/scm/util.go < patch/go-scm/util.go
   - name: build-drone-nolimit
     image: golang:1.14
     commands:
-      - (cd drone && ../build.sh nolimit)
-      - (cd drone && ../tags.sh) > .tags
+      - (cd drone && ../scripts/build.sh nolimit)
+      - (cd drone && ../scripts/tags.sh) > .tags
     environment:
       CGO_ENABLED: 1
       GO111MODULE: on
@@ -86,16 +112,18 @@ steps:
       context: drone
       dockerfile: drone/docker/Dockerfile.server.linux.amd64
       password:
-        from_secret: docker_password
-      repo: garykim/drone-nolimit
-      username: garykim
-    when:
-      branch:
-        - master
-      event:
-        - push
+        from_secret: DOCKERHUB_PASSWORD
       repo:
-        - gary-kim/drone-oss
+        from_secret: DOCKERHUB_REPO_NOLIMIT
+      username:
+        from_secret: DOCKERHUB_USERNAME
+    # when:
+    #   branch:
+    #     - master
+    #   event:
+    #     - push
+    #   repo:
+    #     - JustinTW/drone-oss
 
 trigger:
   branch:
